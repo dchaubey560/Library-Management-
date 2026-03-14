@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Advanced Library Management</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #000000;
+      --card: #f1f1f1;
+    }
+
+    body.dark {
+      --bg: #121212;
+      --text: #ffffff;
+      --card: #1e1e1e;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background-color: var(--card);
+      padding: 20px;
+      border-radius: 5px;
+    }
+
+    h1, h2 {
+      text-align: center;
+    }
+
+    form, .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    form input, form select, .controls input, .controls select, button {
+      padding: 10px;
+      font-size: 16px;
+      flex: 1 1 200px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    li {
+      background: var(--bg);
+      margin: 10px 0;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid #ccc;
+    }
+
+    .pagination {
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    .pagination button {
+      margin: 0 5px;
+    }
+
+    .dark-toggle {
+      float: right;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Library Management System</h1>
+
+    <label class="dark-toggle">
+      <input type="checkbox" id="toggle-dark"> Dark Mode
+    </label>
+
+    <form id="book-form">
+      <input type="text" id="title" placeholder="Book Title" required>
+      <input type="text" id="author" placeholder="Author" required>
+      <select id="category" required>
+        <option value="">Category</option>
+        <option>Fiction</option>
+        <option>Science</option>
+        <option>History</option>
+        <option>Biography</option>
+      </select>
+      <button type="submit">Add Book</button>
+    </form>
+
+    <div class="controls">
+      <input type="text" id="search" placeholder="Search by title or author">
+      <select id="sort">
+        <option value="">Sort</option>
+        <option value="title-asc">Title A–Z</option>
+        <option value="title-desc">Title Z–A</option>
+        <option value="author-asc">Author A–Z</option>
+        <option value="author-desc">Author Z–A</option>
+      </select>
+      <button onclick="exportCSV()">Export CSV</button>
+    </div>
+
+    <h2>Book List</h2>
+    <ul id="book-list"></ul>
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <script>
+    let books = JSON.parse(localStorage.getItem('books')) || [];
+    let currentPage = 1;
+    const itemsPerPage = 5;
+
+    document.getElementById('toggle-dark').addEventListener('change', () => {
+      document.body.classList.toggle('dark');
+    });
+
+    document.getElementById('book-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const title = document.getElementById('title').value.trim();
+      const author = document.getElementById('author').value.trim();
+      const category = document.getElementById('category').value;
+
+      books.push({ title, author, category });
+      saveAndRender();
+      this.reset();
+    });
+
+    document.getElementById('search').addEventListener('input', renderBooks);
+    document.getElementById('sort').addEventListener('change', renderBooks);
+
+    function saveAndRender() {
+      localStorage.setItem('books', JSON.stringify(books));
+      renderBooks();
+    }
+
+    function renderBooks() {
+      const list = document.getElementById('book-list');
+      list.innerHTML = "";
+
+      let filtered = [...books];
+
+      // Search filter
+      const query = document.getElementById('search').value.toLowerCase();
+      if (query) {
+        filtered = filtered.filter(b => b.title.toLowerCase().includes(query) || b.author.toLowerCase().includes(query));
+      }
+
+      // Sort
+      const sort = document.getElementById('sort').value;
+      if (sort === 'title-asc') filtered.sort((a, b) => a.title.localeCompare(b.title));
+      if (sort === 'title-desc') filtered.sort((a, b) => b.title.localeCompare(a.title));
+      if (sort === 'author-asc') filtered.sort((a, b) => a.author.localeCompare(b.author));
+      if (sort === 'author-desc') filtered.sort((a, b) => b.author.localeCompare(a.author));
+
+      // Pagination
+      const totalPages = Math.ceil(filtered.length / itemsPerPage);
+      currentPage = Math.min(currentPage, totalPages) || 1;
+      const start = (currentPage - 1) * itemsPerPage;
+      const paginated = filtered.slice(start, start + itemsPerPage);
+
+      paginated.forEach((book, index) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <span>
+            <strong>${book.title}</strong> by ${book.author} [${book.category}]
+          </span>
+          <span>
+            <button onclick="editBook(${start + index})">Edit</button>
+            <button onclick="deleteBook(${start + index})">Delete</button>
+          </span>
+        `;
+        list.appendChild(li);
+      });
+
+      // Pagination buttons
+      const pagDiv = document.getElementById('pagination');
+      pagDiv.innerHTML = '';
+      for (let i = 1; i <= totalPages; i++) {
+        pagDiv.innerHTML += `<button onclick="goToPage(${i})"${i === currentPage ? ' disabled' : ''}>${i}</button>`;
+      }
+    }
+
+    function goToPage(page) {
+      currentPage = page;
+      renderBooks();
+    }
+
+    function deleteBook(index) {
+      books.splice(index, 1);
+      saveAndRender();
+    }
+
+    function editBook(index) {
+      const book = books[index];
+      const newTitle = prompt("Edit Title", book.title);
+      const newAuthor = prompt("Edit Author", book.author);
+      const newCategory = prompt("Edit Category", book.category);
+      if (newTitle && newAuthor && newCategory) {
+        books[index] = { title: newTitle, author: newAuthor, category: newCategory };
+        saveAndRender();
+      }
+    }
+
+    function exportCSV() {
+      let csv = "Title,Author,Category\n";
+      books.forEach(book => {
+        csv += `"${book.title}","${book.author}","${book.category}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "books.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    renderBooks();
+  </script>
+</body>
+</html>
